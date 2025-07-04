@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Azure AI Chatbot</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .chat-container {
+      width: 400px;
+      height: 600px;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      word-wrap: break-word;
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    .user-message {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      align-self: flex-end;
+    }
+
+    .bot-message {
+      background: #f1f3f4;
+      color: #333;
+      align-self: flex-start;
+      border: 1px solid #e0e0e0;
+    }
+
+    .error-message {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ffcdd2;
+    }
+
+    .typing-indicator {
+      display: none;
+      padding: 12px 16px;
+      background: #f1f3f4;
+      border-radius: 18px;
+      align-self: flex-start;
+      max-width: 80px;
+    }
+
+    .typing-dots {
+      display: flex;
+      gap: 4px;
+    }
+
+    .typing-dots span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #999;
+      animation: typing 1.4s infinite;
+    }
+
+    .typing-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    .chat-input {
+      padding: 20px;
+      border-top: 1px solid #e0e0e0;
+      background: #fafafa;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    #messageInput {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 25px;
+      outline: none;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    #messageInput:focus {
+      border-color: #667eea;
+    }
+
+    #sendButton {
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.2s;
+    }
+
+    #sendButton:hover {
+      transform: translateY(-2px);
+    }
+
+    #sendButton:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes typing {
+      0%, 60%, 100% {
+        transform: translateY(0);
+      }
+      30% {
+        transform: translateY(-10px);
+      }
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-messages::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: #c1c1c1;
+      border-radius: 3px;
+    }
+
+    .chat-messages::-webkit-scrollbar-thumb:hover {
+      background: #a8a8a8;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">🤖 Azure AI Chatbot</div>
+
+    <div class="chat-messages" id="chatMessages">
+      <div class="message bot-message">
+        Hello! I'm your AI assistant. How can I help you today?
+      </div>
+    </div>
+
+    <div class="typing-indicator" id="typingIndicator">
+      <div class="typing-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+
+    <div class="chat-input">
+      <div class="input-group">
+        <input type="text" id="messageInput" placeholder="Type your message..." maxlength="500" />
+        <button id="sendButton">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const chatMessages = document.getElementById("chatMessages");
+    const messageInput = document.getElementById("messageInput");
+    const sendButton = document.getElementById("sendButton");
+    const typingIndicator = document.getElementById("typingIndicator");
+
+    const BACKEND_URL = "http://localhost:5000";
+
+    function addMessage(content, isUser = false, isError = false) {
+      const messageDiv = document.createElement("div");
+      messageDiv.className = `message ${isUser ? "user-message" : "bot-message"}`;
+      if (isError) {
+        messageDiv.classList.add("error-message");
+      }
+      messageDiv.textContent = content;
+      chatMessages.appendChild(messageDiv);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function showTypingIndicator() {
+      typingIndicator.style.display = "block";
+      chatMessages.appendChild(typingIndicator);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function hideTypingIndicator() {
+      typingIndicator.style.display = "none";
+    }
+
+    async function sendMessage() {
+      const message = messageInput.value.trim();
+      if (!message) return;
+
+      addMessage(message, true);
+      messageInput.value = "";
+      sendButton.disabled = true;
+      showTypingIndicator();
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ message }),
+        });
+
+        hideTypingIndicator();
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.response) {
+          addMessage(data.response);
+        } else {
+          addMessage("Sorry, I received an unexpected response format.", false, true);
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        addMessage("Sorry, I'm having trouble connecting to the server. Please try again.", false, true);
+      } finally {
+        sendButton.disabled = false;
+        messageInput.focus();
+      }
+    }
+
+    sendButton.addEventListener("click", sendMessage);
+    messageInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && !sendButton.disabled) {
+        sendMessage();
+      }
+    });
+
+    messageInput.focus();
+  </script>
+</body>
+</html>
